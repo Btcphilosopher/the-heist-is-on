@@ -87,7 +87,7 @@
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M12 6v6l4 2"/>
                 </svg>
-                <span id="time">60.0s</span>
+                <span id="time">90.0s</span>
             </div>
             <div class="stat-item stat-floor">
                 <span id="floor">Floor 1/3</span>
@@ -139,7 +139,7 @@
         var ctx = canvas.getContext('2d');
         var gameState = 'menu';
         var score = 0;
-        var timeLeft = 60;
+        var timeLeft = 90;
         var policeDistance = 100;
         var masterpiecesLeft = 3;
         var currentFloor = 1;
@@ -176,7 +176,7 @@
         function startGame() {
             gameState = 'playing';
             score = 0;
-            timeLeft = 60;
+            timeLeft = 90;
             policeDistance = 100;
             masterpiecesLeft = 3;
             currentFloor = 1;
@@ -257,7 +257,7 @@
                 game.police.push({
                     x: Math.random() * 800,
                     y: 50 + i * 150,
-                    speed: 2.5 + Math.random() * 0.5,
+                    speed: 1.5 + Math.random() * 0.3,
                     floor: 1
                 });
             }
@@ -278,16 +278,16 @@
             var police = game.police;
             var staircases = game.staircases;
 
-            // Controls
+            // Controls - slower acceleration
             if (keys['ArrowUp'] || keys['w'] || keys['W']) {
-                car.speed = Math.min(car.speed + 0.4, 9);
+                car.speed = Math.min(car.speed + 0.25, 6);
             } else if (keys['ArrowDown'] || keys['s'] || keys['S']) {
-                car.speed = Math.max(car.speed - 0.4, -5);
+                car.speed = Math.max(car.speed - 0.25, -3);
             } else {
-                car.speed *= 0.94;
+                car.speed *= 0.92;
             }
-            if (keys['ArrowLeft'] || keys['a'] || keys['A']) car.angle -= 0.09 * Math.abs(car.speed);
-            if (keys['ArrowRight'] || keys['d'] || keys['D']) car.angle += 0.09 * Math.abs(car.speed);
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) car.angle -= 0.06 * Math.abs(car.speed);
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) car.angle += 0.06 * Math.abs(car.speed);
 
             car.x += Math.sin(car.angle) * car.speed;
             car.y -= Math.cos(car.angle) * car.speed;
@@ -308,13 +308,13 @@
                 }
             }
 
-            // Items
+            // Items - larger collision radius
             for (var i = 0; i < items.length; i++) {
                 var item = items[i];
                 if (!item.collected && item.floor === car.floor) {
                     var dx = car.x - item.x, dy = car.y - item.y;
                     var distance = Math.sqrt(dx * dx + dy * dy);
-                    var collisionDist = item.type === 'masterpiece' ? 50 : 40;
+                    var collisionDist = item.type === 'masterpiece' ? 60 : 50;
                     if (distance < collisionDist) {
                         item.collected = true;
                         score += item.value;
@@ -323,23 +323,24 @@
                 }
             }
 
-            // Police
+            // Police - much slower
             var minDistance = 1000;
             for (var i = 0; i < police.length; i++) {
                 var cop = police[i];
                 if (cop.floor === car.floor) {
                     var dx = car.x - cop.x, dy = car.y - cop.y, dist = Math.sqrt(dx*dx+dy*dy);
                     minDistance = Math.min(minDistance, dist);
-                    cop.x += dx * 0.025; cop.y += dy * 0.025;
-                    if (dist < 45) endGame('caught');
+                    cop.x += dx * 0.012;
+                    cop.y += dy * 0.012;
+                    if (dist < 40) endGame('caught');
                 } else {
                     var stairsToCar = staircases.filter(s=>s.from===cop.floor&&s.to===car.floor);
                     if (stairsToCar.length) {
                         var stair = stairsToCar[0];
                         var dx = stair.x + stair.width/2 - cop.x, dy = stair.y + stair.height/2 - cop.y;
                         var dist = Math.sqrt(dx*dx+dy*dy);
-                        if (dist > 0) { cop.x += (dx/dist)*2; cop.y += (dy/dist)*2; }
-                        if (dist < 30) cop.floor = stair.to;
+                        if (dist > 0) { cop.x += (dx/dist)*1.2; cop.y += (dy/dist)*1.2; }
+                        if (dist < 40) cop.floor = stair.to;
                     }
                 }
                 if (cop.x < 0) cop.x = 800; if (cop.x > 800) cop.x = 0;
@@ -464,7 +465,6 @@
         }
 
         window.addEventListener('keydown', function(e) {
-            // For accessibility, allow replay/start by pressing Enter if a button is visible
             if (e.key === "Enter") {
                 if (document.getElementById('menuScreen').style.display !== "none") startGame();
                 if (document.getElementById('caughtScreen').style.display !== "none") startGame();
@@ -475,7 +475,6 @@
         });
         window.addEventListener('keyup', function(e) { game.keys[e.key] = false; });
 
-        // Show menu on load
         showMenu();
         drawMenu();
 

@@ -1,0 +1,531 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Trophy, Clock, AlertCircle, Crown, ArrowUp, ArrowDown } from 'lucide-react';
+
+const MuseumHeist = () => {
+  const canvasRef = useRef(null);
+  const [gameState, setGameState] = useState('menu');
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [policeDistance, setPoliceDistance] = useState(100);
+  const [masterpieces, setMasterpieces] = useState(3);
+  const [currentFloor, setCurrentFloor] = useState(1);
+
+  const gameRef = useRef({
+    car: { x: 400, y: 500, width: 40, height: 60, speed: 0, angle: 0, floor: 1 },
+    items: [],
+    police: [],
+    staircases: [],
+    keys: {},
+    lastTime: 0
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animationId;
+
+    const initGame = () => {
+      gameRef.current.car = { x: 400, y: 500, width: 40, height: 60, speed: 0, angle: 0, floor: 1 };
+      gameRef.current.items = [];
+      gameRef.current.police = [];
+      gameRef.current.staircases = [];
+      setCurrentFloor(1);
+      
+      // Create staircases for navigation
+      // Floor 1 to 2
+      gameRef.current.staircases.push(
+        { x: 100, y: 100, width: 60, height: 80, from: 1, to: 2, type: 'up' },
+        { x: 700, y: 400, width: 60, height: 80, from: 1, to: 2, type: 'up' }
+      );
+      // Floor 2 to 1
+      gameRef.current.staircases.push(
+        { x: 100, y: 400, width: 60, height: 80, from: 2, to: 1, type: 'down' },
+        { x: 700, y: 100, width: 60, height: 80, from: 2, to: 1, type: 'down' }
+      );
+      // Floor 2 to 3
+      gameRef.current.staircases.push(
+        { x: 400, y: 50, width: 80, height: 60, from: 2, to: 3, type: 'up' }
+      );
+      // Floor 3 to 2
+      gameRef.current.staircases.push(
+        { x: 400, y: 500, width: 80, height: 60, from: 3, to: 2, type: 'down' }
+      );
+
+      // FLOOR 1 - Main Gallery
+      const floor1Masterpiece = {
+        x: 400, y: 200, value: 5000, collected: false, floor: 1,
+        type: 'masterpiece', name: 'La Belle Mystérieuse', 
+        color: '#8b4513', size: 'large'
+      };
+      gameRef.current.items.push(floor1Masterpiece);
+
+      for (let i = 0; i < 4; i++) {
+        gameRef.current.items.push({
+          x: 150 + i * 150, y: 350 + (i % 2) * 100,
+          value: 800 + Math.random() * 400, collected: false,
+          floor: 1, type: 'painting'
+        });
+      }
+
+      for (let i = 0; i < 3; i++) {
+        gameRef.current.items.push({
+          x: 200 + i * 200, y: 500,
+          value: 300 + Math.random() * 300, collected: false,
+          floor: 1, type: 'vase'
+        });
+      }
+
+      // FLOOR 2 - Royal Collection
+      const floor2Masterpiece = {
+        x: 600, y: 300, value: 4500, collected: false, floor: 2,
+        type: 'masterpiece', name: 'La Couronne Impériale',
+        color: '#ffd700', size: 'medium'
+      };
+      gameRef.current.items.push(floor2Masterpiece);
+
+      for (let i = 0; i < 5; i++) {
+        gameRef.current.items.push({
+          x: 100 + i * 140, y: 200 + (i % 2) * 150,
+          value: 600 + Math.random() * 500, collected: false,
+          floor: 2, type: i % 2 === 0 ? 'crown' : 'jewel'
+        });
+      }
+
+      // FLOOR 3 - Ancient Gallery
+      const floor3Masterpiece = {
+        x: 400, y: 300, value: 4000, collected: false, floor: 3,
+        type: 'masterpiece', name: 'Le Portrait Royal',
+        color: '#c19a6b', size: 'large'
+      };
+      gameRef.current.items.push(floor3Masterpiece);
+
+      for (let i = 0; i < 4; i++) {
+        gameRef.current.items.push({
+          x: 150 + i * 170, y: 150,
+          value: 600 + Math.random() * 400, collected: false,
+          floor: 3, type: 'statue'
+        });
+      }
+
+      for (let i = 0; i < 3; i++) {
+        gameRef.current.items.push({
+          x: 250 + i * 150, y: 450,
+          value: 400 + Math.random() * 300, collected: false,
+          floor: 3, type: 'painting'
+        });
+      }
+
+      // Police start on floor 1
+      for (let i = 0; i < 3; i++) {
+        gameRef.current.police.push({
+          x: Math.random() * 800,
+          y: -50 - i * 120,
+          speed: 2.5 + Math.random() * 0.5,
+          floor: 1
+        });
+      }
+    };
+
+    const startGame = () => {
+      setGameState('playing');
+      setScore(0);
+      setTimeLeft(60);
+      setPoliceDistance(100);
+      setMasterpieces(3);
+      initGame();
+    };
+
+    const handleKeyDown = (e) => {
+      gameRef.current.keys[e.key] = true;
+    };
+
+    const handleKeyUp = (e) => {
+      gameRef.current.keys[e.key] = false;
+    };
+
+    const gameLoop = (timestamp) => {
+      if (gameState !== 'playing') {
+        animationId = requestAnimationFrame(gameLoop);
+        return;
+      }
+
+      const deltaTime = timestamp - gameRef.current.lastTime;
+      if (deltaTime > 16) {
+        gameRef.current.lastTime = timestamp;
+        update(deltaTime / 16);
+        draw(ctx);
+      }
+
+      animationId = requestAnimationFrame(gameLoop);
+    };
+
+    const update = (dt) => {
+      const { car, keys, items, police, staircases } = gameRef.current;
+
+      if (keys['ArrowUp'] || keys['w']) {
+        car.speed = Math.min(car.speed + 0.4, 9);
+      } else if (keys['ArrowDown'] || keys['s']) {
+        car.speed = Math.max(car.speed - 0.4, -5);
+      } else {
+        car.speed *= 0.94;
+      }
+
+      if (keys['ArrowLeft'] || keys['a']) {
+        car.angle -= 0.09 * Math.abs(car.speed);
+      }
+      if (keys['ArrowRight'] || keys['d']) {
+        car.angle += 0.09 * Math.abs(car.speed);
+      }
+
+      car.x += Math.sin(car.angle) * car.speed;
+      car.y -= Math.cos(car.angle) * car.speed;
+
+      // Wraparound walls
+      if (car.x < 0) car.x = 800;
+      if (car.x > 800) car.x = 0;
+      if (car.y < 0) car.y = 600;
+      if (car.y > 600) car.y = 0;
+
+      // Check staircase collision
+      staircases.forEach(stair => {
+        if (stair.from === car.floor) {
+          if (car.x > stair.x && car.x < stair.x + stair.width &&
+              car.y > stair.y && car.y < stair.y + stair.height) {
+            car.floor = stair.to;
+            setCurrentFloor(stair.to);
+            
+            // Teleport to opposite side
+            if (stair.type === 'up') {
+              car.y = stair.y + stair.height + 50;
+            } else {
+              car.y = stair.y - 50;
+            }
+          }
+        }
+      });
+
+      // Collect items on same floor
+      items.forEach(item => {
+        if (!item.collected && item.floor === car.floor) {
+          const dx = car.x - item.x;
+          const dy = car.y - item.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const collisionDist = item.type === 'masterpiece' ? 50 : 40;
+          
+          if (distance < collisionDist) {
+            item.collected = true;
+            setScore(s => s + item.value);
+            if (item.type === 'masterpiece') {
+              setMasterpieces(m => m - 1);
+            }
+          }
+        }
+      });
+
+      // Police AI - they chase and use stairs
+      let minDistance = 1000;
+      police.forEach(cop => {
+        if (cop.floor === car.floor) {
+          // Chase player on same floor
+          const dx = car.x - cop.x;
+          const dy = car.y - cop.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          minDistance = Math.min(minDistance, dist);
+          
+          cop.x += dx * 0.025;
+          cop.y += dy * 0.025;
+          
+          if (dist < 45) {
+            setGameState('caught');
+          }
+        } else {
+          // Move toward stairs to follow player
+          const nearbyStairs = staircases.filter(s => s.from === cop.floor);
+          if (nearbyStairs.length > 0) {
+            const targetStair = nearbyStairs[0];
+            const dx = targetStair.x - cop.x;
+            const dy = targetStair.y - cop.y;
+            cop.x += dx * 0.015;
+            cop.y += dy * 0.015;
+            
+            // Use stairs
+            if (Math.abs(dx) < 30 && Math.abs(dy) < 30) {
+              cop.floor = targetStair.to;
+            }
+          }
+        }
+
+        // Wraparound for police
+        if (cop.x < 0) cop.x = 800;
+        if (cop.x > 800) cop.x = 0;
+        if (cop.y < 0) cop.y = 600;
+        if (cop.y > 600) cop.y = 0;
+      });
+
+      setPoliceDistance(Math.floor(minDistance));
+
+      setTimeLeft(t => {
+        const newTime = Math.max(0, t - 0.02);
+        if (newTime <= 0) {
+          setGameState('escaped');
+        }
+        return newTime;
+      });
+    };
+
+    const draw = (ctx) => {
+      const { car, items, police, staircases } = gameRef.current;
+
+      // Floor-specific backgrounds
+      const floorColors = {
+        1: '#f5f0e8',
+        2: '#e8e5f0',
+        3: '#f0e8e5'
+      };
+      ctx.fillStyle = floorColors[car.floor];
+      ctx.fillRect(0, 0, 800, 600);
+
+      // Tile pattern
+      ctx.strokeStyle = '#d4c8b8';
+      ctx.lineWidth = 2;
+      for (let x = 0; x < 800; x += 80) {
+        for (let y = 0; y < 600; y += 80) {
+          ctx.strokeRect(x, y, 80, 80);
+        }
+      }
+
+      // Draw staircases on current floor
+      staircases.forEach(stair => {
+        if (stair.from === car.floor) {
+          ctx.fillStyle = stair.type === 'up' ? '#4a9eff' : '#ff9a4a';
+          ctx.fillRect(stair.x, stair.y, stair.width, stair.height);
+          
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 14px Arial';
+          ctx.textAlign = 'center';
+          const text = stair.type === 'up' ? '↑ UP' : '↓ DOWN';
+          ctx.fillText(text, stair.x + stair.width/2, stair.y + stair.height/2 + 5);
+        }
+      });
+
+      // Draw items on current floor
+      items.forEach(item => {
+        if (!item.collected && item.floor === car.floor) {
+          ctx.save();
+          ctx.translate(item.x, item.y);
+          
+          if (item.type === 'masterpiece') {
+            ctx.fillStyle = '#654321';
+            ctx.fillRect(-30, -35, 60, 65);
+            ctx.fillStyle = item.color;
+            ctx.fillRect(-25, -30, 50, 55);
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(-32, -37, 8, 8);
+            ctx.fillRect(24, -37, 8, 8);
+            ctx.fillRect(-32, 29, 8, 8);
+            ctx.fillRect(24, 29, 8, 8);
+            ctx.fillStyle = 'rgba(255, 255, 200, 0.4)';
+            ctx.fillRect(-20, -25, 15, 45);
+          } else if (item.type === 'painting') {
+            ctx.fillStyle = '#5c4033';
+            ctx.fillRect(-18, -24, 36, 42);
+            ctx.fillStyle = '#8b6f47';
+            ctx.fillRect(-15, -21, 30, 36);
+          } else if (item.type === 'statue') {
+            ctx.fillStyle = '#e8e8e8';
+            ctx.fillRect(-10, -20, 20, 40);
+            ctx.fillRect(-8, -28, 16, 12);
+            ctx.fillStyle = '#d0d0d0';
+            ctx.fillRect(-6, -18, 12, 35);
+          } else if (item.type === 'vase') {
+            ctx.fillStyle = '#8b4513';
+            ctx.beginPath();
+            ctx.arc(0, 0, 14, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (item.type === 'crown') {
+            ctx.fillStyle = '#ffd700';
+            ctx.fillRect(-12, -6, 24, 12);
+            for (let i = -10; i <= 10; i += 10) {
+              ctx.fillRect(i - 2, -12, 4, 8);
+            }
+          } else if (item.type === 'jewel') {
+            ctx.fillStyle = '#4169e1';
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          
+          ctx.restore();
+        }
+      });
+
+      // Draw police on current floor
+      police.forEach(cop => {
+        if (cop.floor === car.floor) {
+          ctx.save();
+          ctx.translate(cop.x, cop.y);
+          
+          ctx.fillStyle = '#1e3a8a';
+          ctx.fillRect(-20, -32, 40, 64);
+          ctx.fillStyle = '#4a5568';
+          ctx.fillRect(-15, -22, 30, 24);
+          ctx.fillStyle = '#0055a4';
+          ctx.fillRect(-18, -30, 12, 6);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(-6, -30, 12, 6);
+          ctx.fillStyle = '#ef4135';
+          ctx.fillRect(6, -30, 12, 6);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 8px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('POLICE', 0, 8);
+          
+          ctx.restore();
+        }
+      });
+
+      // Draw player car
+      ctx.save();
+      ctx.translate(car.x, car.y);
+      ctx.rotate(car.angle);
+      
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(-20, -30, 40, 60);
+      ctx.fillStyle = '#2d2d2d';
+      ctx.fillRect(-15, -20, 30, 28);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(-24, -22, 10, 16);
+      ctx.fillRect(14, -22, 10, 16);
+      ctx.fillRect(-24, 6, 10, 16);
+      ctx.fillRect(14, 6, 10, 16);
+      ctx.fillStyle = '#ffff99';
+      ctx.fillRect(-15, -32, 8, 4);
+      ctx.fillRect(7, -32, 8, 4);
+      
+      ctx.restore();
+    };
+
+    if (gameState === 'menu') {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#f5f0e8';
+      ctx.fillRect(0, 0, 800, 600);
+      
+      ctx.fillStyle = '#1a1a1a';
+      ctx.font = 'bold 54px Georgia';
+      ctx.textAlign = 'center';
+      ctx.fillText('Le Grand Musée Heist', 400, 200);
+      
+      ctx.font = 'italic 28px Georgia';
+      ctx.fillStyle = '#0055a4';
+      ctx.fillText('Paris, France', 400, 250);
+      
+      ctx.font = '22px Arial';
+      ctx.fillStyle = '#333';
+      ctx.fillText('3 Floors • Wraparound Walls', 400, 320);
+      ctx.fillText('Use stairs to evade police!', 400, 355);
+      
+      ctx.font = '18px Arial';
+      ctx.fillStyle = '#666';
+      ctx.fillText('Arrow Keys or WASD to drive', 400, 420);
+      ctx.fillText('Drive through walls to wrap around', 400, 450);
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    animationId = requestAnimationFrame(gameLoop);
+
+    window.startGame = startGame;
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      cancelAnimationFrame(animationId);
+    };
+  }, [gameState]);
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-blue-900 via-blue-800 to-red-900 p-4">
+      <div className="bg-gray-800 rounded-lg shadow-2xl p-6">
+        <h1 className="text-3xl font-bold text-center mb-2 text-white">
+          🇫🇷 Le Grand Musée de Paris 🇫🇷
+        </h1>
+        
+        <div className="flex justify-between items-center mb-4 gap-4">
+          <div className="flex items-center gap-2 text-yellow-400">
+            <Trophy size={24} />
+            <span className="text-2xl font-bold">€{score.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center gap-2 text-blue-400">
+            <Clock size={24} />
+            <span className="text-2xl font-bold">{timeLeft.toFixed(1)}s</span>
+          </div>
+          <div className="flex items-center gap-2 text-green-400">
+            <div className="text-xl font-bold">Floor {currentFloor}/3</div>
+          </div>
+          <div className="flex items-center gap-2 text-purple-400">
+            <Crown size={24} />
+            <span className="text-xl font-bold">{masterpieces}/3</span>
+          </div>
+          <div className="flex items-center gap-2 text-red-400">
+            <AlertCircle size={24} />
+            <span className="text-xl font-bold">{policeDistance}m</span>
+          </div>
+        </div>
+
+        <canvas
+          ref={canvasRef}
+          width={800}
+          height={600}
+          className="border-4 border-gray-600 rounded bg-amber-50"
+        />
+
+        <div className="mt-4 text-center">
+          {gameState === 'menu' && (
+            <button
+              onClick={() => window.startGame && window.startGame()}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-xl"
+            >
+              Commencer le Braquage
+            </button>
+          )}
+          {gameState === 'caught' && (
+            <div className="text-white">
+              <h2 className="text-3xl font-bold text-red-500 mb-2">Arrêté!</h2>
+              <p className="text-xl mb-2">La Gendarmerie vous a attrapé!</p>
+              <p className="text-2xl font-bold mb-4">Butin Final: €{score.toLocaleString()}</p>
+              <button
+                onClick={() => window.startGame && window.startGame()}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg"
+              >
+                Réessayer
+              </button>
+            </div>
+          )}
+          {gameState === 'escaped' && (
+            <div className="text-white">
+              <h2 className="text-3xl font-bold text-green-500 mb-2">Échappé!</h2>
+              <p className="text-xl mb-2">Vous avez réussi le braquage!</p>
+              <p className="text-2xl font-bold mb-4">Butin Total: €{score.toLocaleString()}</p>
+              {masterpieces === 0 && (
+                <p className="text-xl text-yellow-400 mb-4">✨ Tous les chefs-d'œuvre volés! ✨</p>
+              )}
+              <button
+                onClick={() => window.startGame && window.startGame()}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg"
+              >
+                Rejouer
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 text-gray-300 text-center text-sm">
+          🚗 WASD/Arrows • 🏛️ 3 Floors with stairs • 🔄 Walls wrap around • 👮 Police follow you!
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MuseumHeist;
